@@ -4,10 +4,9 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use DB;
+
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Hash;
-use Tymon\JWTAuth\Facades\JWTAuth;
+
 use App\Models\Dealers\Dealer;
 use App\Models\Dealers\AlertMessage;
 use App\Models\Dealers\Version;
@@ -187,7 +186,7 @@ class GetNewDealerList extends Controller
 
             return $isSameVersion;
         } catch (\Exception $e) {
-           echo Log::error('getVersion Error: ' . $e->getMessage());
+            Log::error('getVersion Error: ' . $e->getMessage());
             return false;
         }
     }
