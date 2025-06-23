@@ -123,4 +123,6 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    'server_ip' => env('server_ip', '127.0.0.1'),
+
 ];
