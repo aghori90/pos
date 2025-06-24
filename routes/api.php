@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\UserController;
 use App\Http\Controllers\API\GetNewDealerList;
 use App\Http\Controllers\API\AuthenticateUser;
+use App\Http\Controllers\API\AuthenticationController;
 
 // Route::get('/user', function (Request $request) {
     // return $request->user();
@@ -14,6 +15,7 @@ Route::group(['middleware'=>'api'],function($routes){
     Route::post('register',[UserController::class,'register']);
     Route::post('dealerList',[GetNewDealerList::class,'getNewDealerList']);
     Route::post('authDealer',[AuthenticateUser::class,'authenticateUser']);
+    Route::post('/authenticateotp', [AuthenticationController::class, 'authenticateUserWithOTP']); // auth w otp
 });
 
 // Api 2 : get Ekyc Details:
@@ -27,5 +29,6 @@ Route::post('/getMemberDetails', [GetMemberDetailsController::class, 'getMemberD
 // Api 4: Get Transaction Report Controller:
 use App\Http\Controllers\API\TransactionReportController;
 Route::post('/transactionReport', [TransactionReportController::class, 'transactionReport']);
+
 
 // api 5 : Insert Transaction: API:
