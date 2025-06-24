@@ -123,6 +123,8 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
-    'server_ip' => env('server_ip', '127.0.0.1'),
-
+    'server_ip' => env('server_ip', 1),
+    'sopLogsFlag' => env('sopLogsFlag', 0),
+    'error_logs_database' => env('error_logs_database', 2),
+ 
 ];

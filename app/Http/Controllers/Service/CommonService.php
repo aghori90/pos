@@ -11,7 +11,6 @@ use App\Models\Dealers\AuthenticateFail;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Config;
 
-
 class CommonService extends Controller
 {
      public static function checkMachineHhdId($hhdid)

@@ -1,16 +1,19 @@
 <?php
 
-namespace App\Models;
+namespace App\Models\Dealers;
 
 use Illuminate\Database\Eloquent\Model;
 
 class AuaResponseurl extends Model
 {
-    protected $table = 'auaResponseurls';
+    protected $table = 'auaresponseurls';
 
     public $timestamps = true;
 
     protected $fillable = [
-        'aua_url','auaUrlFlag','sever_ip','status','nic_japit'
+        'sever_ip',
+        'status',
+        'aua_url',
+        'auaUrlFlag'
     ];
 }
