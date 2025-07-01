@@ -14,11 +14,20 @@ class TransactionReportController extends Controller
 
     public function transactionReport(Request $request)
     {
-        $hhdid = $request->input('hhdid');
-        $privateKey = $request->input('privateKey');
+        $rawXml = $request->getContent();
+
+        libxml_use_internal_errors(true);
+        $xml = simplexml_load_string($rawXml);
+
+        if (!$xml) {
+        return $this->xmlResponse('transactionReport', '998', 'अवैध XML प्रारूप');
+        }
+
+        $hhdid = (string) $xml->hhdid;
+        $privateKey = (string) $xml->privateKey;
 
         if (strcasecmp($privateKey, $this->secretKey) !== 0) {
-            return $this->xmlResponse('transactionReport', '111', 'सीक्रेट टोकन की मिलान असफल रही');
+        return $this->xmlResponse('transactionReport', '111', 'सीक्रेट टोकन की मिलान असफल रही');
         }
 
         return $this->generateReportXml($hhdid);
