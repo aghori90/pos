@@ -1,0 +1,186 @@
+<?php
+
+namespace App\Http\Controllers\API;
+
+use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use App\Models\Dealers\Dealer;
+use App\Models\Dealers\AlertMessage;
+use App\Models\Dealers\Version;
+use App\Models\Dealers\HhdMaster;
+use App\Models\Dealers\Master;
+
+class GetNewDealerList extends Controller
+{
+    public function getNewDealerList(Request $request)
+    {
+        // Read and parse the raw XML input
+
+        Log::info('RAW INPUT:', ['raw' => $request->getContent()]);
+
+        $rawXml = $request->getContent();
+
+        Log::info('Raw XML Received:', ['xml' => $rawXml]); // Optional debugging
+
+        $xmlInput = simplexml_load_string($rawXml, "SimpleXMLElement", LIBXML_NOCDATA);
+        if (!$xmlInput) {
+            return $this->xmlManualResponse(['ResponseCode' => '400', 'Message' => 'Invalid XML']);
+        }
+
+        // Handle namespaces if present
+        $namespaces = $xmlInput->getNamespaces(true);
+        $soapNs = $namespaces['SOAP-ENV'] ?? array_values($namespaces)[0] ?? null;
+        $body = $soapNs ? $xmlInput->children($soapNs)->Body : $xmlInput->Body;
+
+        if (!$body) {
+            return $this->xmlManualResponse(['ResponseCode' => '400', 'Message' => 'Missing SOAP Body']);
+        }
+
+        // Get the function node (e.g., getNewDealerList)
+        $payload = null;
+        foreach ($body->children() as $child) {
+            $payload = $child;
+            break;
+        }
+
+        if (!$payload) {
+            return $this->xmlManualResponse(['ResponseCode' => '400', 'Message' => 'Missing payload inside SOAP Body']);
+        }
+
+        $data = json_decode(json_encode($payload), true);
+
+        $requiredFields = ['hhdid', 'versionno', 'signalRange', 'MobileOperaterName', 'simNo', 'privateKey'];
+        foreach ($requiredFields as $field) {
+            if (!isset($data[$field]) || empty($data[$field])) {
+                return $this->xmlManualResponse(['ResponseCode' => '400', 'Message' => 'Invalid input: ' . $field]);
+            }
+        }
+
+        // Extract and sanitize
+        $hhdid = trim($data['hhdid']);
+        $versionno = trim($data['versionno']);
+        $signalRange = (int) $data['signalRange'];
+        $MobileOperaterName = trim($data['MobileOperaterName']);
+        $simNo = trim($data['simNo']);
+        $privateKey = trim($data['privateKey']);
+
+        // Secret key validation
+        $pk = 'hhd9870%^94*@!';
+        if ($privateKey !== $pk) {
+            return $this->xmlManualResponse(['ResponseCode' => '111', 'Message' => 'सीक्रेट टोकन की मिलान असफल रही']);
+        }
+
+        // Check machine
+        $dealerId = $this->checkMachineHhdId($hhdid);
+        if ($dealerId === 'NA') {
+            return $this->xmlManualResponse(['ResponseCode' => '202', 'Message' => 'आपका मशीन सर्वर में रजिस्टर नहीं है ,सुधार हेतु जिला के साथ संपर्क करें']);
+        }
+
+        $dealer = Dealer::where('id', trim($dealerId))->first();
+        if (!$dealer) {
+            return $this->xmlManualResponse(['ResponseCode' => '501', 'Message' => 'पी.डी.एस.सर्वर में डीलर लिस्ट नहीं है']);
+        }
+
+        // Version check
+        if (!$this->getVersion($hhdid, $versionno, $dealer->dealerType, $MobileOperaterName, $signalRange, $simNo)) {
+            return $this->xmlManualResponse(['ResponseCode' => '131', 'Message' => 'नवीनतम संस्करण आ गया हैं । कृपया डाउनलोड करे']);
+        }
+
+        // Active/inactive logic
+        if ($dealer->active === "1") {
+            if (in_array($dealer->dealerType, ["1", "3"])) {
+                return $this->successResponse($dealer);
+            } else {
+                return $this->xmlManualResponse(['ResponseCode' => '204', 'Message' => 'ऑनलाइन नेटवर्क के लिए रजिस्टर नहीं है']);
+            }
+        } else {
+            if (in_array($dealer->dealerType, ["1", "3"])) {
+                $tagDealer = Dealer::where('id', $dealer->tagDealerId)->first();
+                return $this->successResponse($tagDealer);
+            } else {
+                return $this->xmlManualResponse(['ResponseCode' => '203', 'Message' => 'विक्रेता को निलंबित कर दिया गया है ,सुधार हेतु जिला के साथ संपर्क करें']);
+            }
+        }
+    }
+
+    private function successResponse($dealer)
+    {
+        return $this->xmlManualResponse([
+            'ResponseCode' => '000',
+            'UserName' => $dealer->name,
+            'UID' => $dealer->uid,
+            'MobileNo' => $dealer->mobile,
+            'DealerType' => $dealer->dealerType,
+            'Date' => now()->format('Y-m-d'),
+            'Time' => now()->format('H:i:s'),
+            'weighingFlag' => $dealer->weighingFlag,
+            'dongleFlag' => $dealer->dongleFlag
+        ]);
+    }
+
+    private function xmlManualResponse(array $attributes): \Illuminate\Http\Response
+    {
+        $xml = new \SimpleXMLElement('<?xml version="1.0" encoding="UTF-8"?><getNewDealerList/>');
+        $dealerList = $xml->addChild('DealerList');
+
+        foreach ($attributes as $key => $value) {
+            $dealerList->addAttribute($key, $value);
+        }
+
+        $xmlString = $xml->asXML();
+        $xmlString = mb_convert_encoding($xmlString, 'UTF-8', 'UTF-8');
+
+        return response($xmlString, 200)->header('Content-Type', 'application/xml; charset=UTF-8');
+    }
+
+    private function checkMachineHhdId($hhdid)
+    {
+        try {
+            $record = HhdMaster::where('mappedStatus', 'M')
+                ->where('hhdSlNo', trim($hhdid))
+                ->first();
+
+            return $record && !empty($record->dealerId) ? $record->dealerId : 'NA';
+        } catch (\Exception $e) {
+            Log::error('checkMachineHhdId Error: ' . $e->getMessage());
+            return 'NA';
+        }
+    }
+
+    private function getVersion($hhdid, $versionno, $dealerType, $mobileOperaterName, $signalRange, $simNo)
+    {
+        try {
+            $today = now()->toDateString();
+            $latestVersion = Version::where('dealerType', $dealerType)->orderByDesc('id')->first();
+
+            if (empty($latestVersion->version_no)) {
+                return false;
+            }
+
+            $isSameVersion = strtolower(trim($latestVersion->version_no)) === strtolower(trim($versionno));
+            $versionId = $latestVersion->id;
+
+            Master::where('hhdSlNo', trim($hhdid))->update([
+                'version_id' => $versionId,
+                'signalRange' => $signalRange,
+                'mobileOperaterName' => $mobileOperaterName,
+                'simNumber' => $simNo,
+                'lastLogin' => $today
+            ]);
+
+            HhdMaster::where('hhdSlNo', trim($hhdid))->update([
+                'version_id' => $versionId,
+                'signalRange' => $signalRange,
+                'mobileOperaterName' => $mobileOperaterName,
+                'simNumber' => $simNo,
+                'lastLogin' => $today
+            ]);
+
+            return $isSameVersion;
+        } catch (\Exception $e) {
+            Log::error('getVersion Error: ' . $e->getMessage());
+            return false;
+        }
+    }
+}

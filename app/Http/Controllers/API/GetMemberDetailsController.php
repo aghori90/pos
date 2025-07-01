@@ -11,12 +11,17 @@ class GetMemberDetailsController extends Controller
 {
     public function getMemberDetails(Request $request)
     {
-        $aadhaarNo = $request->input('AadhaarNo');
-        $idNo = $request->input('idNo');
+        // Parse XML input
+        $rawXml = $request->getContent();
+        libxml_use_internal_errors(true);
+        $xml = simplexml_load_string($rawXml);
 
-        if (!$aadhaarNo || !$idNo) {
+        if (!$xml || !isset($xml->AadhaarNo) || !isset($xml->idNo)) {
             return $this->xmlResponse(400, 'AadhaarNo और idNo आवश्यक हैं');
         }
+
+        $aadhaarNo = (string) $xml->AadhaarNo;
+        $idNo = (string) $xml->idNo;
 
         // Step 1: Get current month and year
         $month = Carbon::now()->format('n');
